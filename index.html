@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>반짝반짝 보석 가게 💎</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 구글 폰트 -->
+    <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+    <!-- QR 스캐너 라이브러리 -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- SweetAlert2 (알림창) -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body {
+            font-family: 'Gaegu', cursive;
+            background-color: #EBF4FA; /* 파스텔 하늘색 배경 */
+            -webkit-tap-highlight-color: transparent;
+        }
+        .bouncy {
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .click-bounce:active {
+            transform: scale(0.95);
+            transition: transform 0.05s;
+        }
+        /* QR 스캐너 내부 비디오 화면을 꽉 차고 둥글게 */
+        #reader video {
+            object-fit: cover !important;
+            border-radius: 1.5rem;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen text-gray-800">
+
+    <!-- [화면 1] 웰컴 대기 화면 (홈 버튼 누르면 나오는 첫 화면) -->
+    <div id="welcome-screen" class="flex-grow flex flex-col items-center justify-center text-center p-6 gap-12 relative min-h-screen">
+        <!-- 설정 버튼 (대기 화면 구석에 배치하여 교사가 관리하기 편하게 함) -->
+        <button onclick="enterAdminMode()" class="absolute top-6 right-6 bg-white bg-opacity-80 text-slate-400 font-bold px-4 py-2 rounded-full shadow-sm hover:bg-slate-50 text-sm border border-slate-100">
+            ⚙️ 설정
+        </button>
+        
+        <div class="space-y-4">
+            <h1 class="text-6xl md:text-7xl font-bold text-slate-800 tracking-wider bouncy">✨ 반짝반짝 보석 가게 ✨</h1>
+            <p class="text-2xl md:text-3xl text-slate-500 font-bold">어서오세요! 아래 버튼을 누르면 계산을 시작해요.</p>
+        </div>
+        
+        <!-- 대형 계산하기 버튼 -->
+        <button onclick="startKiosk()" class="click-bounce bg-sky-400 hover:bg-sky-500 text-white text-4xl md:text-5xl font-bold py-12 px-24 rounded-[3rem] shadow-2xl border-b-8 border-sky-600 active:border-b-0 transition-all flex items-center gap-4">
+            <span>💎 계산하기 💎</span>
+        </button>
+    </div>
+
+    <!-- [화면 2] 상단 헤더 (스캔 화면 진입시에만 노출) -->
+    <header id="main-header" class="hidden flex justify-between items-center p-6 max-w-6xl mx-auto w-full">
+        <div>
+            <h1 class="text-4xl font-bold text-slate-800 tracking-wider">✨ QR 스캔 ✨</h1>
+            <p class="text-lg text-slate-500 mt-1">상품 QR을 카메라에 비춰주세요</p>
+        </div>
+        
+        <!-- 우측 상단 홈 버튼 -->
+        <div class="flex gap-3">
+            <button onclick="goHome()" class="bg-white text-slate-700 font-bold px-6 py-2.5 rounded-full shadow-md hover:bg-slate-50 transition-all text-lg border border-slate-100">
+                홈
+            </button>
+        </div>
+    </header>
+
+    <!-- [화면 3] 메인 키오스크 스캔 화면 (스캔 화면 진입시에만 노출) -->
+    <main id="kiosk-screen" class="hidden max-w-6xl mx-auto w-full px-6 pb-6 grid grid-cols-1 md:grid-cols-12 gap-6 flex-grow items-stretch">
+        
+        <!-- [왼쪽] 전면 스캐너 카메라 영역 -->
+        <div class="md:col-span-7 bg-white rounded-[2rem] p-6 shadow-lg border border-white flex flex-col items-center justify-between min-h-[400px]">
+            <div class="w-full flex-grow flex items-center justify-center">
+                <div id="reader" class="w-full rounded-[1.5rem] overflow-hidden bg-black aspect-square max-w-[420px] shadow-inner relative border-4 border-slate-50">
+                    <div id="loading-message" class="absolute inset-0 flex items-center justify-center text-white font-bold text-xl">
+                        📷 카메라도 준비 중...
+                    </div>
+                </div>
+            </div>
+            <p class="text-slate-500 font-bold text-xl mt-4 text-center">전면 카메라에 상품 QR을 비춰주세요.</p>
+        </div>
+
+        <!-- [오른쪽] 장바구니 및 제어 버튼 영역 -->
+        <div class="md:col-span-5 flex flex-col gap-4">
+            
+            <!-- 장바구니 리스트 -->
+            <div class="bg-white rounded-[2rem] p-6 shadow-lg border border-white flex-grow flex flex-col min-h-[300px]">
+                <div class="flex justify-between items-center mb-4 border-b-2 border-slate-50 pb-3">
+                    <span class="text-2xl font-bold text-slate-700">🛒 장바구니</span>
+                    <div class="text-2xl font-bold text-slate-800">
+                        <span id="total-gems" class="text-red-500 text-3xl font-bold">0</span> 개
+                    </div>
+                </div>
+                
+                <div id="cart-list" class="flex-grow overflow-y-auto space-y-2 max-h-[320px] mb-2 pr-1">
+                    <p id="empty-message" class="text-center text-slate-400 text-xl py-24 leading-relaxed">
+                        장바구니가 비어 있어요.<br>
+                        상품을 스캔하거나 목록에서 담아 주세요.
+                    </p>
+                </div>
+            </div>
+
+            <!-- 하단 버튼 영역 -->
+            <div class="flex gap-4">
+                <button onclick="openProductList()" class="click-bounce w-1/3 bg-white hover:bg-slate-50 text-slate-700 text-2xl font-bold py-6 rounded-2xl shadow-md border-2 border-slate-200 transition-all">
+                    상품 목록
+                </button>
+                <button onclick="checkout()" class="click-bounce w-2/3 bg-sky-400 hover:bg-sky-500 text-white text-3xl font-bold py-6 rounded-2xl shadow-lg border-b-4 border-sky-600 active:border-b-0 transition-all">
+                    결제하기
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- [모달] 직접 담는 상품 목록 팝업 -->
+    <div id="product-list-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-[2.5rem] p-6 w-full max-w-2xl flex flex-col max-h-[80vh] border-4 border-sky-100 shadow-2xl">
+            <div class="flex justify-between items-center border-b-2 border-slate-100 pb-4 mb-4">
+                <h3 class="text-3xl font-bold text-slate-700">🛍️ 무슨 물건을 살까요?</h3>
+                <button onclick="closeProductList()" class="text-slate-400 hover:text-slate-600 text-4xl font-bold">&times;</button>
+            </div>
+            
+            <div id="kiosk-product-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-4 overflow-y-auto p-1 flex-grow"></div>
+
+            <button onclick="closeProductList()" class="click-bounce mt-6 w-full bg-sky-400 text-white text-2xl font-bold py-4 rounded-2xl shadow-md border-b-4 border-sky-600 active:border-b-0">
+                선택 완료! 장바구니 보기
+            </button>
+        </div>
+    </div>
+
+    <!-- [화면 4] 점장님 설정 모드 -->
+    <section id="admin-screen" class="hidden p-6 max-w-2xl mx-auto w-full flex flex-col gap-6">
+        <div class="bg-white rounded-3xl p-6 shadow-xl border-4 border-indigo-300">
+            <div class="flex justify-between items-center border-b-2 border-gray-200 pb-4 mb-4">
+                <h2 class="text-3xl font-bold text-indigo-600">🛠️ 점장님 설정 모드</h2>
+                <button onclick="exitAdminMode()" class="bg-gray-400 text-white px-5 py-2 rounded-xl font-bold text-lg">나가기</button>
+            </div>
+
+            <div class="bg-indigo-50 p-4 rounded-2xl mb-6 flex flex-wrap gap-3 justify-between items-center">
+                <span class="font-bold text-lg text-indigo-800">📦 상품 데이터 관리</span>
+                <div class="flex gap-2">
+                    <button onclick="exportData()" class="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold">백업 저장</button>
+                    <label class="bg-orange-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer">
+                        가져오기 <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
+                    </label>
+                    <button onclick="resetAllProducts()" class="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold">⚠️ 전체 초기화</button>
+                </div>
+            </div>
+
+            <!-- 새 상품 추가 폼 -->
+            <form id="product-form" onsubmit="saveProduct(event)" class="bg-pink-50 p-4 rounded-2xl mb-6 space-y-4">
+                <h3 class="text-xl font-bold text-pink-600">➕ 새 상품 추가하기</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-600">상품 이름</label>
+                        <input type="text" id="p-name" required class="w-full p-2 rounded-lg border border-gray-300" placeholder="예: 무지개 사탕">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-600">보석 가격</label>
+                        <input type="number" id="p-price" required min="1" class="w-full p-2 rounded-lg border border-gray-300" placeholder="예: 2">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-sm font-bold text-gray-600">QR코드 글자</label>
+                        <input type="text" id="p-qr" required class="w-full p-2 rounded-lg border-2 border-pink-200 focus:border-pink-400 outline-none" placeholder="예: candy-01">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-sm font-bold text-gray-600">이미지 종류 선택</label>
+                        <select id="p-img-type" onchange="toggleImageInput('add')" class="w-full p-2 rounded-lg border border-gray-300 bg-white font-bold text-indigo-600">
+                            <option value="emoji">✨ 귀여운 이모지 고르기</option>
+                            <option value="file">📸 직접 찍은 사진 올리기</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="add-emoji-box" class="p-3 bg-white rounded-xl border">
+                    <label class="block text-sm font-bold text-gray-500 mb-1">아이콘 선택:</label>
+                    <div class="grid grid-cols-8 gap-2 text-2xl max-h-[100px] overflow-y-auto p-1 border rounded" id="emoji-picker-container"></div>
+                    <input type="hidden" id="p-emoji-val" value="🧸">
+                    <div class="text-sm font-bold text-pink-500 mt-2">선택된 아이콘: <span id="p-selected-emoji" class="text-3xl">🧸</span></div>
+                </div>
+
+                <div id="add-file-box" class="p-3 bg-white rounded-xl border hidden">
+                    <label class="block text-sm font-bold text-gray-600">사진 파일 등록</label>
+                    <input type="file" id="p-image" accept="image/*" class="w-full p-1 rounded-lg border border-gray-300 bg-white text-sm">
+                </div>
+
+                <button type="submit" class="w-full bg-pink-400 text-white font-bold py-3 rounded-lg hover:bg-pink-500 text-lg shadow">상품 등록하기</button>
+            </form>
+
+            <h3 class="text-xl font-bold text-gray-700 mb-3">📋 현재 등록된 상품 및 QR코드 인쇄</h3>
+            <div id="admin-product-list" class="space-y-4 max-h-[400px] overflow-y-auto pr-2"></div>
+        </div>
+    </section>
+
+    <!-- [모달] 상품 수정 팝업 -->
+    <div id="edit-product-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-3xl p-6 w-full max-w-sm border-4 border-blue-400 shadow-2xl">
+            <h3 class="text-2xl font-bold text-blue-600 mb-4 border-b-2 pb-2">✏️ 상품 정보 바꾸기</h3>
+            <form id="edit-form" onsubmit="updateProduct(event)" class="space-y-4">
+                <input type="hidden" id="edit-old-key">
+                <div>
+                    <label class="block text-sm font-bold text-gray-600">상품 이름</label>
+                    <input type="text" id="edit-name" required class="w-full p-2 rounded-lg border border-gray-300">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-600">보석 가격</label>
+                    <input type="number" id="edit-price" required min="1" class="w-full p-2 rounded-lg border border-gray-300">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-600">QR코드 글자 수정</label>
+                    <input type="text" id="edit-qr" required class="w-full p-2 rounded-lg border border-blue-300">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-600">이미지 변경 방법</label>
+                    <select id="edit-img-type" onchange="toggleImageInput('edit')" class="w-full p-2 rounded-lg border border-gray-300 bg-white font-bold text-blue-600 my-1">
+                        <option value="keep">이전 이미지 그대로 쓰기</option>
+                        <option value="emoji">✨ 귀여운 이모지 새로 고르기</option>
+                        <option value="file">📸 직접 찍은 사진 올리기</option>
+                    </select>
+                </div>
+
+                <div id="edit-emoji-box" class="p-2 bg-gray-50 rounded-lg border hidden">
+                    <div class="grid grid-cols-8 gap-1 text-2xl max-h-[80px] overflow-y-auto p-1 border rounded bg-white" id="edit-emoji-picker-container"></div>
+                    <input type="hidden" id="edit-emoji-val" value="">
+                    <p class="text-xs font-bold text-blue-500 mt-1">선택된 아이콘: <span id="edit-selected-emoji" class="text-2xl"></span></p>
+                </div>
+
+                <div id="edit-file-box" class="p-2 bg-gray-50 rounded-lg border hidden">
+                    <img id="edit-preview-img" class="w-12 h-12 object-cover rounded-lg border mb-1">
+                    <input type="file" id="edit-image" accept="image/*" class="w-full p-1 rounded-lg border border-gray-300 bg-white text-xs">
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeEditModal()" class="w-1/2 bg-gray-400 text-white font-bold py-2 rounded-lg">취소</button>
+                    <button type="submit" class="w-1/2 bg-blue-500 text-white font-bold py-2 rounded-lg">저장하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 오디오 효과음 -->
+    <audio id="sound-scan" src="https://assets.mixkit.co/active_storage/sfx/2019/2019-84.wav" preload="auto"></audio>
+    <audio id="sound-success" src="https://assets.mixkit.co/active_storage/sfx/2017/2017-84.wav" preload="auto"></audio>
+
+    <script>
+        const defaultProducts = {
+            "gem-toy-bear": { name: "곰돌이 인형", price: 3, image: "https://images.unsplash.com/photo-1559251606-c623743a6d76?w=150" },
+            "gem-toy-car": { name: "멋진 자동차", price: 2, image: "https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=150" },
+            "gem-ice-cream": { name: "아이스크림", price: 1, image: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=150" }
+        };
+
+        const emojiList = ["🧸", "👑", "💎", "🚗", "🍦", "🍰", "🍭", "🍩", "🎁", "🎈", "🐱", "🐶", "🐰", "🦁", "🍎", "🍉", "🍕", "🍟", "🥤", "⚽", "🎨", "🎸", "📚", "🔑", "💍", "👓", "🦄", "🐼"];
+        let products = {};
+        let cart = [];
+        let html5QrcodeScanner = null;
+
+        let isProductListOpen = false; 
+        let lastScannedKey = null;
+        let lastScannedTime = 0;
+
+        // [방화벽 대비 안전망] 알림창
+        function safeAlert(title, text, icon = 'info') {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ title: title, text: text, icon: icon, confirmButtonColor: '#38bdf8' });
+            } else {
+                alert(`${title}\n${text}`);
+            }
+        }
+
+        // [방화벽 대비 안전망] 토스트 알림
+        function showToast(message, isSuccess = true) {
+            if (typeof Swal !== 'undefined') {
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'bottom-end',
+                    showConfirmButton: false,
+                    timer: 1000
+                });
+                Toast.fire({ icon: isSuccess ? 'success' : 'warning', title: message });
+                return;
+            }
+            
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-5 right-5 z-50 text-white px-6 py-3 rounded-2xl shadow-lg font-bold text-lg transition-all duration-300 transform translate-y-10 opacity-0`;
+            toast.style.backgroundColor = isSuccess ? '#38bdf8' : '#f87171';
+            toast.innerText = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => { toast.classList.remove('translate-y-10', 'opacity-0'); }, 50);
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 1200);
+        }
+
+        function loadProducts() {
+            try {
+                const saved = localStorage.getItem('gem_kiosk_products');
+                if (saved) {
+                    products = JSON.parse(saved);
+                } else {
+                    products = { ...defaultProducts };
+                    localStorage.setItem('gem_kiosk_products', JSON.stringify(products));
+                }
+            } catch (e) {
+                products = { ...defaultProducts };
+            }
+        }
+
+        function saveProductsToStorage() {
+            try {
+                localStorage.setItem('gem_kiosk_products', JSON.stringify(products));
+            } catch (e) {}
+        }
+
+        window.onload = function() {
+            loadProducts();
+            updateCartUI();
+            buildEmojiPickers();
+            // 첫 화면은 항상 웰컴 대기화면을 띄웁니다.
+            goHome(); 
+        };
+
+        // 웰컴 대기 화면으로 상태 변경 (카메라 종료 및 화면 초기화)
+        function goHome() {
+            cart = [];
+            updateCartUI();
+            stopScanner(); // 불필요하게 켜진 카메라 전원 정지
+
+            document.getElementById('welcome-screen').classList.remove('hidden');
+            document.getElementById('main-header').classList.add('hidden');
+            document.getElementById('kiosk-screen').classList.add('hidden');
+            document.getElementById('admin-screen').classList.add('hidden');
+        }
+
+        // 스캔 쇼핑 모드 진입 (카메라 작동 및 화면 전환)
+        function startKiosk() {
+            document.getElementById('welcome-screen').classList.add('hidden');
+            document.getElementById('main-header').classList.remove('hidden');
+            document.getElementById('kiosk-screen').classList.remove('hidden');
+
+            startContinuousScanner(); // 전면카메라 켜기
+        }
+
+        // 전면 카메라 가동
+        function startContinuousScanner() {
+            const loadingMsg = document.getElementById('loading-message');
+            if (loadingMsg) loadingMsg.style.display = 'flex';
+            
+            if (typeof Html5Qrcode === 'undefined') {
+                showCameraFallback();
+                return;
+            }
+
+            try {
+                html5QrcodeScanner = new Html5Qrcode("reader");
+                const config = { 
+                    fps: 15, 
+                    qrbox: function(width, height) {
+                        const minDim = Math.min(width, height);
+                        return { width: Math.floor(minDim * 0.7), height: Math.floor(minDim * 0.7) };
+                    },
+                    aspectRatio: 1.0
+                };
+                
+                html5QrcodeScanner.start(
+                    { facingMode: "user" }, 
+                    config,
+                    onScanSuccess
+                ).then(() => {
+                    if (loadingMsg) loadingMsg.style.display = 'none';
+                }).catch(err => {
+                    showCameraFallback();
+                });
+            } catch (e) {
+                showCameraFallback();
+            }
+        }
+
+        // 카메라 정지
+        function stopScanner() {
+            if (html5QrcodeScanner) {
+                try {
+                    html5QrcodeScanner.stop().catch(()=>{});
+                } catch(e) {}
+                html5QrcodeScanner = null;
+            }
+        }
+
+        function showCameraFallback() {
+            const readerBox = document.getElementById('reader');
+            if (readerBox) {
+                readerBox.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full p-4 text-white text-center bg-slate-800">
+                        <p class="font-bold text-lg mb-1 text-yellow-300">⚠️ 카메라 연결 필요</p>
+                        <p class="text-[11px] text-slate-300 mb-4 leading-relaxed">주소창 왼쪽 자물쇠에서<br>'카메라 권한'을 허용해 주시거나<br>아래 버튼으로 직접 사진을 찍어주세요!</p>
+                        <label class="click-bounce bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold px-4 py-2.5 rounded-xl cursor-pointer shadow-md">
+                            📸 직접 사진 찍기
+                            <input type="file" accept="image/*" capture="user" class="hidden" onchange="scanLocalFile(event)">
+                        </label>
+                    </div>
+                `;
+            }
+        }
+
+        function onScanSuccess(decodedText) {
+            if (isProductListOpen) return;
+
+            const now = Date.now();
+            if (decodedText === lastScannedKey && (now - lastScannedTime) < 1500) {
+                return; 
+            }
+
+            lastScannedKey = decodedText;
+            lastScannedTime = now;
+
+            addProductToCart(decodedText);
+        }
+
+        function scanLocalFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const tempDecoder = new Html5Qrcode("reader");
+            tempDecoder.scanFile(file, true)
+                .then(decodedText => {
+                    addProductToCart(decodedText);
+                })
+                .catch(err => {
+                    safeAlert('인식 실패!', 'QR코드가 선명하게 나오도록 다시 촬영해 주세요.', 'error');
+                });
+        }
+
+        function openProductList() {
+            isProductListOpen = true; 
+            renderKioskProducts();
+            document.getElementById('product-list-modal').classList.remove('hidden');
+        }
+
+        function closeProductList() {
+            isProductListOpen = false; 
+            document.getElementById('product-list-modal').classList.add('hidden');
+        }
+
+        function renderKioskProducts() {
+            const grid = document.getElementById('kiosk-product-grid');
+            if(!grid) return;
+            grid.innerHTML = '';
+
+            Object.keys(products).forEach(key => {
+                const item = products[key];
+                const buttonHTML = `
+                    <button onclick="addProductToCart('${key}')" class="click-bounce flex flex-col items-center bg-white hover:bg-sky-50 p-3 rounded-2xl border-2 border-slate-100 shadow-sm transition-all w-full">
+                        <img src="${item.image}" class="w-20 h-20 object-cover rounded-xl border border-slate-50 mb-2 pointer-events-none">
+                        <span class="text-lg font-bold text-slate-700 truncate w-full text-center pointer-events-none">${item.name}</span>
+                        <span class="text-sm font-bold text-blue-500 mt-1 pointer-events-none">💎 ${item.price}개</span>
+                    </button>
+                `;
+                grid.insertAdjacentHTML('beforeend', buttonHTML);
+            });
+        }
+
+        function addProductToCart(key) {
+            const product = products[key];
+            if (product) {
+                cart.push({ key: key, ...product });
+                updateCartUI();
+                playAudio('sound-scan');
+                showToast(`${product.name} 추가!`);
+            } else {
+                showToast('등록되지 않은 QR코드입니다.', false);
+            }
+        }
+
+        function updateCartUI() {
+            const cartList = document.getElementById('cart-list');
+            const emptyMessage = document.getElementById('empty-message');
+            if(!cartList) return;
+            
+            cartList.querySelectorAll('.cart-item').forEach(el => el.remove());
+            
+            if (cart.length === 0) {
+                if(emptyMessage) emptyMessage.classList.remove('hidden');
+                document.getElementById('total-gems').innerText = 0;
+                return;
+            }
+
+            if(emptyMessage) emptyMessage.classList.add('hidden');
+            let total = 0;
+            
+            cart.forEach((item, index) => {
+                total += parseInt(item.price);
+                const div = document.createElement('div');
+                div.className = "cart-item flex justify-between items-center bg-sky-50 p-3 rounded-2xl border border-sky-100";
+                div.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <img src="${item.image}" class="w-12 h-12 object-cover rounded-xl border-2 border-white shadow-sm">
+                        <span class="text-xl font-bold text-slate-700">${item.name}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg text-blue-600 font-bold">💎 ${item.price}개</span>
+                        <button onclick="removeFromCart(${index})" class="text-red-400 font-bold text-sm bg-white border border-red-100 px-2.5 py-1 rounded-xl shadow-sm hover:bg-red-50">빼기</button>
+                    </div>
+                `;
+                cartList.appendChild(div);
+                cartList.scrollTop = cartList.scrollHeight; 
+            });
+
+            document.getElementById('total-gems').innerText = total;
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            updateCartUI();
+        }
+
+        // 최종 결제 및 리셋 처리
+        function checkout() {
+            if (cart.length === 0) {
+                safeAlert('장바구니가 비어 있어요!', '물건을 스캔하거나 상품 목록에서 골라보세요.', 'warning');
+                return;
+            }
+            const total = document.getElementById('total-gems').innerText;
+            playAudio('sound-success');
+
+            const completeCheckout = () => {
+                cart = [];
+                updateCartUI();
+                goHome(); // 결제가 완료되면 자동으로 웰컴 대기 화면으로 완전히 돌아갑니다.
+            };
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: '🎉 멋지게 쇼핑 성공! 🎉',
+                    html: `<p class="text-2xl">가게에 보석 <b class="text-indigo-600">${total}개</b>를 냈습니다.</p>`,
+                    icon: 'success',
+                    confirmButtonText: '확인',
+                    confirmButtonColor: '#38bdf8'
+                }).then(() => {
+                    completeCheckout();
+                });
+            } else {
+                alert(`🎉 멋지게 쇼핑 성공! 🎉\n가게에 보석 ${total}개를 냈습니다.`);
+                completeCheckout();
+            }
+        }
+
+        // 점장님 비밀번호 설정 및 진입
+        function enterAdminMode() {
+            const passwordAction = (pass) => {
+                if (pass === '1234') {
+                    stopScanner(); // 관리자 모드 진입 시 카메라 임시 정지
+                    
+                    document.getElementById('welcome-screen').classList.add('hidden');
+                    document.getElementById('main-header').classList.add('hidden');
+                    document.getElementById('kiosk-screen').classList.add('hidden');
+                    document.getElementById('admin-screen').classList.remove('hidden');
+                    renderAdminProducts();
+                } else if (pass !== null && pass !== '') {
+                    safeAlert('틀렸어요!', '점장님 비밀번호가 맞지 않습니다.', 'error');
+                }
+            };
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: '점장님 비밀번호를 쓰세요',
+                    input: 'password',
+                    showCancelButton: true,
+                    confirmButtonText: '확인',
+                    cancelButtonText: '취소'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        passwordAction(result.value);
+                    }
+                });
+            } else {
+                const browserPass = prompt('점장님 비밀번호를 입력해 주세요:');
+                passwordAction(browserPass);
+            }
+        }
+
+        function exitAdminMode() {
+            document.getElementById('admin-screen').classList.add('hidden');
+            goHome(); // 설정 완료 후 첫 대기화면으로 이동
+        }
+
+        function buildEmojiPickers() {
+            const addContainer = document.getElementById('emoji-picker-container');
+            const editContainer = document.getElementById('edit-emoji-picker-container');
+            if(!addContainer || !editContainer) return;
+            
+            addContainer.innerHTML = '';
+            editContainer.innerHTML = '';
+
+            emojiList.forEach(emoji => {
+                const btnHTML = `<button type="button" onclick="selectEmoji('add', '${emoji}')" class="hover:bg-gray-100 p-1 rounded text-center text-3xl">${emoji}</button>`;
+                addContainer.insertAdjacentHTML('beforeend', btnHTML);
+
+                const btnEditHTML = `<button type="button" onclick="selectEmoji('edit', '${emoji}')" class="hover:bg-gray-100 p-1 rounded text-center text-3xl">${emoji}</button>`;
+                editContainer.insertAdjacentHTML('beforeend', btnEditHTML);
+            });
+        }
+
+        function selectEmoji(mode, emoji) {
+            if (mode === 'add') {
+                document.getElementById('p-emoji-val').value = emoji;
+                document.getElementById('p-selected-emoji').innerText = emoji;
+            } else {
+                document.getElementById('edit-emoji-val').value = emoji;
+                document.getElementById('edit-selected-emoji').innerText = emoji;
+            }
+        }
+
+        function toggleImageInput(mode) {
+            if (mode === 'add') {
+                const type = document.getElementById('p-img-type').value;
+                document.getElementById('add-emoji-box').style.display = type === 'emoji' ? 'block' : 'none';
+                document.getElementById('add-file-box').style.display = type === 'file' ? 'block' : 'none';
+            } else {
+                const type = document.getElementById('edit-img-type').value;
+                document.getElementById('edit-emoji-box').style.display = type === 'emoji' ? 'block' : 'none';
+                document.getElementById('edit-file-box').style.display = type === 'file' ? 'block' : 'none';
+            }
+        }
+
+        function convertEmojiToImage(emoji) {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 150;
+                canvas.height = 150;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#FFEDF2';
+                ctx.beginPath();
+                ctx.arc(75, 75, 75, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.font = '90px Arial';
+                ctx.textBaseline = 'middle';
+                ctx.textAlign = 'center';
+                ctx.fillText(emoji || "🎁", 75, 82);
+                return canvas.toDataURL('image/png');
+            } catch (err) {
+                return "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=150";
+            }
+        }
+
+        function processImage(file, callback) {
+            if (!file) {
+                callback(null);
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 120;
+                        const scale = MAX_WIDTH / img.width;
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scale;
+                        
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        callback(canvas.toDataURL('image/jpeg', 0.5));
+                    } catch (e) {
+                        callback(null);
+                    }
+                }
+                img.onerror = function() { callback(null); };
+                img.src = e.target.result;
+            }
+            reader.onerror = function() { callback(null); };
+            reader.readAsDataURL(file);
+        }
+
+        function resetAllProducts() {
+            if (confirm('정말 모든 제품을 삭제하고 처음 상태로 되돌리겠습니까?')) {
+                try { localStorage.removeItem('gem_kiosk_products'); } catch(e){}
+                products = { ...defaultProducts };
+                saveProductsToStorage();
+                renderAdminProducts();
+                showToast('초기화 완료!');
+            }
+        }
+
+        function saveProduct(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('p-name').value.trim();
+            const priceVal = document.getElementById('p-price').value;
+            const customKey = document.getElementById('p-qr').value.trim();
+            const imgType = document.getElementById('p-img-type').value;
+
+            if (!name || !priceVal || !customKey) {
+                safeAlert('입력 오류', '모든 빈칸을 채워주세요.', 'warning');
+                return;
+            }
+
+            const safeKeyRegex = /^[a-zA-Z0-9\-_]+$/;
+            if (!safeKeyRegex.test(customKey)) {
+                safeAlert('QR 코드 이름 오류!', '영문자, 숫자, 하이픈(-), 언더바(_)만 입력할 수 있습니다.', 'error');
+                return;
+            }
+
+            if (products[customKey]) {
+                safeAlert('이미 사용 중인 QR 글자!', '다른 QR 이름을 지어주세요.', 'warning');
+                return;
+            }
+
+            const price = parseInt(priceVal);
+
+            const finalizeAdd = (finalImage) => {
+                try {
+                    products[customKey] = { name: name, price: price, image: finalImage };
+                    saveProductsToStorage();
+                    renderAdminProducts();
+                    
+                    document.getElementById('product-form').reset();
+                    document.getElementById('p-emoji-val').value = "🧸";
+                    document.getElementById('p-selected-emoji').innerText = "🧸";
+                    toggleImageInput('add');
+
+                    safeAlert('등록 완료!', '새 상품 등록과 QR코드 생성이 완료되었습니다.', 'success');
+                } catch (storageErr) {
+                    safeAlert('용량 초과!', '사진 크기가 너무 큽니다. 이모지 종류를 이용해 주세요.', 'error');
+                }
+            };
+
+            if (imgType === 'emoji') {
+                const selectedEmoji = document.getElementById('p-emoji-val').value || "🧸";
+                const emojiImgUrl = convertEmojiToImage(selectedEmoji);
+                finalizeAdd(emojiImgUrl);
+            } else {
+                const imageFile = document.getElementById('p-image').files[0];
+                if (!imageFile) {
+                    safeAlert('사진 없음!', '등록할 사진 파일을 선택해 주세요.', 'warning');
+                    return;
+                }
+                processImage(imageFile, function(resizedImg) {
+                    finalizeAdd(resizedImg || convertEmojiToImage("📦"));
+                });
+            }
+        }
+
+        function openEditModal(key) {
+            const item = products[key];
+            if (!item) return;
+
+            document.getElementById('edit-old-key').value = key;
+            document.getElementById('edit-qr').value = key;
+            document.getElementById('edit-name').value = item.name;
+            document.getElementById('edit-price').value = item.price;
+            document.getElementById('edit-preview-img').src = item.image;
+            document.getElementById('edit-img-type').value = "keep";
+            document.getElementById('edit-image').value = "";
+            document.getElementById('edit-emoji-val').value = "🧸";
+            document.getElementById('edit-selected-emoji').innerText = "🧸";
+            
+            toggleImageInput('edit');
+            document.getElementById('edit-product-modal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-product-modal').classList.add('hidden');
+        }
+
+        function updateProduct(e) {
+            e.preventDefault();
+            const oldKey = document.getElementById('edit-old-key').value;
+            const newKey = document.getElementById('edit-qr').value.trim();
+            const name = document.getElementById('edit-name').value.trim();
+            const price = parseInt(document.getElementById('edit-price').value);
+            const imgType = document.getElementById('edit-img-type').value;
+
+            if (!products[oldKey]) return;
+
+            const safeKeyRegex = /^[a-zA-Z0-9\-_]+$/;
+            if (!safeKeyRegex.test(newKey)) {
+                safeAlert('QR코드 이름 오류!', '영문자, 숫자, 하이픈(-), 언더바(_)만 사용 가능합니다.', 'error');
+                return;
+            }
+
+            if (newKey !== oldKey && products[newKey]) {
+                safeAlert('중복된 QR 글자!', '이미 등록된 QR코드 이름입니다.', 'warning');
+                return;
+            }
+
+            const finalizeUpdate = (newImage) => {
+                try {
+                    const finalImg = newImage ? newImage : products[oldKey].image;
+
+                    if (newKey !== oldKey) {
+                        delete products[oldKey];
+                    }
+
+                    products[newKey] = { name: name, price: price, image: finalImg };
+
+                    saveProductsToStorage();
+                    renderAdminProducts();
+                    closeEditModal();
+                    safeAlert('수정 성공!', '상품 정보가 잘 바뀌었습니다.', 'success');
+                } catch (storageErr) {
+                    safeAlert('용량 부족!', '이미지를 이모지로 바꿔 용량을 최소화해 보세요.', 'error');
+                }
+            };
+
+            if (imgType === 'keep') {
+                finalizeUpdate(null);
+            } else if (imgType === 'emoji') {
+                const selectedEmoji = document.getElementById('edit-emoji-val').value;
+                const emojiImgUrl = convertEmojiToImage(selectedEmoji);
+                finalizeUpdate(emojiImgUrl);
+            } else {
+                const imageFile = document.getElementById('edit-image').files[0];
+                if (!imageFile) {
+                    finalizeUpdate(null);
+                    return;
+                }
+                processImage(imageFile, function(resizedImg) {
+                    finalizeUpdate(resizedImg);
+                });
+            }
+        }
+
+        function deleteProduct(key) {
+            if (confirm('정말 삭제하겠습니까?')) {
+                delete products[key];
+                saveProductsToStorage();
+                renderAdminProducts();
+                showToast('삭제 완료!');
+            }
+        }
+
+        function renderAdminProducts() {
+            const listContainer = document.getElementById('admin-product-list');
+            if(!listContainer) return;
+            listContainer.innerHTML = '';
+
+            Object.keys(products).forEach(key => {
+                const item = products[key];
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between border-2 border-gray-100 p-4 rounded-2xl bg-white shadow-sm flex-wrap gap-4";
+                
+                const escapedKey = key.replace(/'/g, "\\'");
+                const qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(key)}`;
+
+                div.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <img src="${item.image}" class="w-16 h-16 object-cover rounded-xl border">
+                        <div>
+                            <p class="text-xl font-bold text-gray-800">${item.name}</p>
+                            <p class="text-sm text-blue-600 font-bold">💎 보석 ${item.price}개</p>
+                            <p class="text-[11px] text-gray-400">QR내용: <b class="text-pink-500">${key}</b></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="flex flex-col items-center">
+                            <img src="${qrImgSrc}" class="w-16 h-16 border p-1 rounded bg-white shadow-sm" alt="QR코드">
+                            <span class="text-xs text-gray-500 mt-1">인쇄용 QR</span>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <button type="button" onclick="openEditModal('${escapedKey}')" class="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold">수정</button>
+                            <button type="button" onclick="deleteProduct('${escapedKey}')" class="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold">삭제</button>
+                        </div>
+                    </div>
+                `;
+                listContainer.appendChild(div);
+            });
+        }
+
+        function playAudio(id) {
+            try {
+                const audio = document.getElementById(id);
+                if (audio) {
+                    audio.currentTime = 0;
+                    audio.play().catch(()=>{});
+                }
+            } catch(e){}
+        }
+
+        function exportData() {
+            try {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(products));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", "보석가게_상품데이터.json");
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+            } catch (err) {
+                safeAlert('백업 실패', '보안 상의 이유로 파일을 내보낼 수 없습니다.', 'error');
+            }
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (typeof imported === 'object') {
+                        products = imported;
+                        saveProductsToStorage();
+                        renderAdminProducts();
+                        safeAlert('복구 성공!', '가게 데이터를 가져왔습니다.', 'success');
+                    }
+                } catch (err) {
+                    safeAlert('가져오기 실패', '백업 파일 양식이 맞지 않습니다.', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
